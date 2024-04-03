@@ -60,6 +60,23 @@ cameraL:
   # publish depth resolution: {width: 640, height: 480}
   # multipass: True
 
+  # Custom projection matrix
+  projection matrix: 
+  [[ 0.0013173 ,  0.        ,  0.99939947,  0.        ],
+       [ 0.        ,  0.00292734, -1.        ,  0.        ],
+       [ 0.        ,  0.        , -1.002002  , -0.02002002],
+       [ 0.        ,  0.        , -1.        ,  0.        ]]
+
+  plugins: [
+    {
+      name: camera_projection_override,
+      path: ../../build/plugins/camera_projection_override,
+      filename: libcamera_projection_override.so
+    }
+  ]
+
+
+
 cameraR:
   namespace: cameras/
   name: cameraR
