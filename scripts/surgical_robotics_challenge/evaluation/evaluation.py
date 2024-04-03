@@ -11,6 +11,7 @@ from collections import deque
 from enum import Enum
 from ambf_client import Client
 from argparse import ArgumentParser
+from surgical_robotics_challenge import units_conversion
 
 
 def frame_to_pose_stamped_msg(frame):
@@ -60,36 +61,20 @@ def pose_msg_to_frame(msg):
     return Frame(R, p)
 
 
-def ambf_obj_pose_to_frame(obj):
-    """
-
-    :param obj:
-    :return:
-    """
-    p = Vector(obj.get_pos().x,
-               obj.get_pos().y,
-               obj.get_pos().z)
-    R = Rotation.Quaternion(obj.get_rot().x,
-                            obj.get_rot().y,
-                            obj.get_rot().z,
-                            obj.get_rot().w)
-    return Frame(R, p)
-
-
 class GlobalParams:
     hole_count = 4
     # The Object Aligned Bounding Box (OABB) to check for needle tip
-    hole_bounds = Vector(0.05, 0.05, 0.05)
-    insertion_depth_threshold = 0.01
+    hole_bounds = Vector(0.005, 0.005, 0.005) # in SI
+    insertion_depth_threshold = 0.001 # in SI
 
 
 class NeedleKinematics:
     # Base in Needle Origin
-    T_bINn = Frame(Rotation.RPY(0., 0., 0.), Vector(-0.102, 0., 0.))
+    T_bINn = Frame(Rotation.RPY(0., 0., 0.), Vector(-0.102, 0., 0.) / units_conversion.SimToSI.linear_factor)
     # Mid in Needle Origin
-    T_mINn = Frame(Rotation.RPY(0., 0., -1.091), Vector(-0.048, 0.093, 0.))
+    T_mINn = Frame(Rotation.RPY(0., 0., -1.091), Vector(-0.048, 0.093, 0.) / units_conversion.SimToSI.linear_factor)
     # Tip in Needle Origin
-    T_tINn = Frame(Rotation.RPY(0., 0., -0.585), Vector(0.056, 0.085, 0.))
+    T_tINn = Frame(Rotation.RPY(0., 0., -0.585), Vector(0.056, 0.085, 0.) / units_conversion.SimToSI.linear_factor)
 
     def __init__(self):
         """
@@ -106,7 +91,9 @@ class NeedleKinematics:
         :param msg:
         :return:
         """
-        self._T_nINw = pose_msg_to_frame(msg.pose)
+        T_nINw = pose_msg_to_frame(msg.pose)
+        T_nINw.p = T_nINw.p / units_conversion.SimToSI.linear_factor
+        self._T_nINw = T_nINw
 
     def get_tip_pose(self):
         """
@@ -204,7 +191,9 @@ class Task_1_Evaluation:
         :param msg:
         :return:
         """
-        self._T_ecmINw = pose_msg_to_frame(msg.pose)
+        T_ecmINw = pose_msg_to_frame(msg.pose)
+        T_ecmINw.p = T_ecmINw.p / units_conversion.SimToSI.linear_factor
+        self._T_ecmINw = T_ecmINw
 
     def task_completion_cb(self, msg):
         """
@@ -224,7 +213,7 @@ class Task_1_Evaluation:
         """
         while not self._done:
             time.sleep(1.0)
-            print('[', time.time(), '] Waiting for task 1 completion report')
+            print('[', time.time(), '] Waiting for task completion report')
 
         T_nINw = self._needle_kinematics.get_pose()
 
@@ -287,19 +276,19 @@ class Task_2_Evaluation_Report():
             print(OK_STR('\t Task Successful: '))
             print('\t Completion Time: ', self.completion_time)
             print('\t Targeted Entry/Exit Hole Pair (1 to 4): ', self.entry_exit_idx + 1)
-            print('\t Needle Tip Axial Distance From Exit Hole (Recommended 0.05): ', self.L_ntINexit_axial)
-            print('\t Needle Tip P Exit Hole During Insertion (Lower is Better): ',
-                  self.P_ntINexit_lateral)
+            print('\t Needle Tip Axial Distance From Exit Hole (Recommended {})'.format(GlobalParams.hole_bounds[0]), self.L_ntINexit_axial)
             print('\t Needle Tip P From Entry Hole During Insertion (Lower is Better): ',
                   self.P_ntINentry_lateral)
-            print('\t Needle Tip Lateral Distance From Exit Hole During Insertion (Lower is Better): ',
-                  self.L_ntINexit_lateral)
+            print('\t Needle Tip P Exit Hole During Insertion (Lower is Better): ',
+                  self.P_ntINexit_lateral)
             print('\t Needle Tip Lateral Distance From Entry Hole During Insertion (Lower is Better): ',
                   self.L_ntINentry_lateral)
-            print('\t Needle Tip Max Lateral Component From Exit Hole During Insertion (Lower is Better): ',
-                  self.P_max_ntINexit_lateral)
+            print('\t Needle Tip Lateral Distance From Exit Hole During Insertion (Lower is Better): ',
+                  self.L_ntINexit_lateral)
             print('\t Needle Tip Max Lateral Component From Entry Hole During Insertion (Lower is Better): ',
                   self.P_max_ntINentry_lateral)
+            print('\t Needle Tip Max Lateral Component From Exit Hole During Insertion (Lower is Better): ',
+                  self.P_max_ntINexit_lateral)
         else:
             print(FAIL_STR('Task Failed: '))
 
@@ -511,7 +500,7 @@ class Task_2_Evaluation():
 
         for hole_type in HoleType:
             for i in range(GlobalParams.hole_count):
-                SKF.T_holesINw[hole_type][i] = ambf_obj_pose_to_frame(self._hole_objs[hole_type][i])
+                SKF.T_holesINw[hole_type][i] = units_conversion.get_pose(self._hole_objs[hole_type][i])
 
         self._scene_trajectories.append(SKF)
         return SKF
@@ -562,7 +551,7 @@ class Task_2_Evaluation():
             self.compute_needle_hole_proximity_event(SKF)
             t = t + 0.01
             if t % 1.0 >= 0.99:
-                print(time.time(), ' ) Waiting for task 2 completion report')
+                print(time.time(), ' ) Waiting for task completion report')
 
         # Record the final trajectories
         SKF = self.capture_scene_kinematics()
@@ -636,18 +625,18 @@ class Task_3_Evaluation_Report():
 
         :return:
         """
-        print('Team: ', self.team_name, ' Task 2 Completion Report: ')
+        print('Team: ', self.team_name, ' Task 3 Completion Report: ')
         if self.success:
             print(OK_STR('\t Task Successful: '))
             print('\t Completion Time: ', self.completion_time)
-            print('\t Needle Tip Axial Distance From Exit Hole (4/4) (Recommended 0.05): ', self.L_ntINexit_axial)
+            print('\t Needle Tip Axial Distance From Exit Hole (4/4) (Recommended {})'.format(GlobalParams.hole_bounds[0]), self.L_ntINexit_axial)
             for hidx in range(GlobalParams.hole_count):
                 print('--------------------------------------------')
                 print('\t Hole Number: ', hidx + 1, '/', GlobalParams.hole_count)
-                print('\t Needle Tip Lateral Distance From Exit Hole During Insertion (Lower is Better): ',
-                      self.L_ntINexit_lateral[hidx])
                 print('\t Needle Tip Lateral Distance From Entry Hole During Insertion (Lower is Better): ',
                       self.L_ntINentry_lateral[hidx])
+                print('\t Needle Tip Lateral Distance From Exit Hole During Insertion (Lower is Better): ',
+                      self.L_ntINexit_lateral[hidx])
         else:
             print(FAIL_STR('Task Failed: '))
 
@@ -700,7 +689,7 @@ class Task_3_Evaluation():
 
         for hole_type in HoleType:
             for i in range(GlobalParams.hole_count):
-                SKF.T_holesINw[hole_type][i] = ambf_obj_pose_to_frame(self._hole_objs[hole_type][i])
+                SKF.T_holesINw[hole_type][i] = units_conversion.get_pose(self._hole_objs[hole_type][i])
 
         self._scene_trajectories.append(SKF)
         return SKF
@@ -751,7 +740,7 @@ class Task_3_Evaluation():
             self.compute_needle_hole_proximity_event(SKF)
             t = t + 0.01
             if t % 1.0 >= 0.99:
-                print(time.time(), ' ) Waiting for task 3 completion report')
+                print(time.time(), ' ) Waiting for task completion report')
 
         # Record the final trajectories
         SKF = self.capture_scene_kinematics()
@@ -804,20 +793,12 @@ class Task_3_Evaluation():
         self._report.print_report()
 
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument('-t', action='store', dest='team_name', help='Team Name', default='test_team')
-    parser.add_argument('-e', action='store', dest='task_evaluation', help='Task to evaluate (1,2 or 3)')
-
-    parsed_args = parser.parse_args()
-    print('Specified Arguments')
-    print(parsed_args)
-
+def evaluate(args):
     client = Client('surgical_robotics_task_evaluation')
     client.connect()
 
-    team_name = parsed_args.team_name
-    task_to_evaluate = int(parsed_args.task_evaluation)
+    team_name = args.team_name
+    task_to_evaluate = int(args.task_evaluation)
     if task_to_evaluate not in [1, 2, 3]:
         raise Exception('ERROR! Acceptable task evaluation options (-e option) are 1, 2 or 3')
 
@@ -831,3 +812,15 @@ if __name__ == "__main__":
 
     task_eval.evaluate()
     print(OK_STR('GOOD BYE'))
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument('-t', action='store', dest='team_name', help='Team Name', default='test_team')
+    parser.add_argument('-e', action='store', dest='task_evaluation', help='Task to evaluate (1,2 or 3)')
+
+    parsed_args = parser.parse_args()
+    print('Specified Arguments')
+    print(parsed_args)
+    evaluate(parsed_args)
+
