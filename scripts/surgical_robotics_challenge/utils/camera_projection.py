@@ -45,30 +45,36 @@ def main(world, camera, intrin):
         print(ppx)
         print(ppy)
 
-        K[0,0] = fx/frame_width
-        K[1,1] = fy/frame_height
-        K[0,1] = ppx/frame_width
-        K[0,2] = ppy/frame_height
+        K[0,0] = fx#/frame_width
+        K[1,1] = fy#/frame_height
+        K[0,2] = ppx#/frame_width
+        K[1,2] = ppy#/frame_height
         
     print('Camera Intrinsic Matrix:', K)
-    # # K[0, 2] = 900
-    # K[0, 2] = 922
-    # K[0, 0] = 1.02*K[0, 0]
-    # K = K/3
 
     depth = far - near
     p_M = np.zeros([4,4])
+
+    # From Hong Chao's code
     p_M[0, 0] = 2*K[0,0]/width
-    p_M[0, 1] = -2*K[0,1]/width
-    p_M[0, 2] = (width - 2*K[0,2] + 2 * fx)/width
+    p_M[0, 2] = (width - 2*K[0,2])/width
     p_M[1, 1] = 2*K[1,1]/height
-    p_M[1, 2] = (height - 2*K[1,2]+ 2 * fy)/height
+    p_M[1, 2] = (-height + 2*K[1,2])/height
     p_M[2, 2] = (-far - near)/depth
     p_M[2, 3] = -2*(far*near)/depth
     p_M[3, 2] = -1
 
+    # From Hisashi
+    # https://www.songho.ca/opengl/gl_projectionmatrix.html
+    p_M[0, 0] = 2*K[0,0]/width
+    p_M[0, 2] = (2*K[0,2])/width
+    p_M[1, 1] = 2*K[1,1]/height
+    p_M[1, 2] = (2*K[1,2])/height
+    p_M[2, 2] = (-far - near)/depth
+    p_M[2, 3] = -2*(far*near)/depth
+    p_M[3, 2] = -1
     print(repr(p_M))
-      
+
 
 if __name__ == '__main__':
     main()
